@@ -14,6 +14,7 @@
 #include <chrono>
 #include <fstream>
 #include <mutex>
+#include <algorithm>
 
 class EasyLogs {
 public:
@@ -51,6 +52,7 @@ public:
 
 private:
 	std::mutex data_mutex;
+	std::mutex txt_file_mutex;
 
 	struct LogNote {
 		time_t time = -1;						// время лога
@@ -89,6 +91,8 @@ private:
 	void __open_via_char__(const std::vector<char>& vector, uint32_t& data_index, const std::vector<LogNote*> main_vector, std::vector<LogNote*>& other_vector);
 
 	bool AddLogBack(std::vector<unsigned char> types, std::string text);
+	std::string __get_log_name__(const unsigned char& type);
+	std::string __get_str_from_time__(const time_t& time);
 	
 	void Clear();
 };

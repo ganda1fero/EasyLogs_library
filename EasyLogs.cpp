@@ -472,6 +472,110 @@ void EasyLogs::__open_via_char__(const std::vector<char>& vector, uint32_t& data
 	}
 }
 
+bool EasyLogs::AddLogBack(std::vector<unsigned char> types, std::string text) {
+	if (is_open_ == false)
+		return false;
+
+	time_t log_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	
+	std::sort(types.begin(), types.end(), [](const unsigned char& first, const unsigned char& second) {
+		return first < second;
+		});
+
+	std::string for_txt{ "" };
+
+	for_txt += __get_str_from_time__(log_time) + ' ';
+	for (uint32_t i{ 0 }; i < types.size(); i++)
+		for_txt += __get_log_name__(types[i]);
+	for_txt += ' ' + text;
+	
+	if (txt_file_.is_open()) {
+		txt_file_mutex.lock();
+		txt_file_ << '\n' << for_txt;
+		txt_file_.flush();
+		txt_file_mutex.unlock();
+	}
+	
+	LogNote* tmp_ptr = new LogNote;
+	tmp_ptr->log_text = text;
+	tmp_ptr->log_types = types;
+	tmp_ptr->time = log_time;
+	
+	// запрос на бинарник
+	data_mutex.lock();
+	tmp_ptr->parent_index = AllLogs_data_.size();	// станет на место .back() + 1
+	AllLogs_data_.push_back(tmp_ptr);
+	for (uint32_t i{ 0 }; i < tmp_ptr->log_types.size(); i++) {
+		switch (tmp_ptr->log_types[i])
+		{
+		case EL_ERROR:
+			ErrorLogs_.push_back(tmp_ptr);
+			break;
+		case EL_SYSTEM:
+			SystemLogs_.push_back(tmp_ptr);
+			break;
+		case EL_SECURITY:
+			SecurityLogs_.push_back(tmp_ptr);
+			break;
+		case EL_AUTH:
+			AuthLogs_.push_back(tmp_ptr);
+			break;
+		case EL_ACTION:
+			ActionLogs_.push_back(tmp_ptr);
+			break;
+		case EL_JUDGE:
+			JudgeLogs_.push_back(tmp_ptr);
+			break;
+		case EL_NETWORK:
+			NetworkLogs_.push_back(tmp_ptr);
+			break;
+		}
+	}
+	data_mutex.unlock();
+
+	return true;
+}
+
+std::string EasyLogs::__get_log_name__(const unsigned char& type) {
+	switch (type)
+	{
+	case EL_ERROR:
+		return "[ERROR]";
+		break;
+	case EL_SYSTEM:
+		return "[SYSTEM]";
+		break;
+	case EL_SECURITY:
+		return "[SECURITY]";
+		break;
+	case EL_AUTH:
+		return "[AUTH]";
+		break;
+	case EL_ACTION:
+		return "[ACTION]";
+		break;
+	case EL_JUDGE:
+		return "[JUDGE]";
+		break;
+	case EL_NETWORK:
+		return "[NETWORK]";
+		break;
+	default:
+		return "[NONE]";
+		break;
+	}
+}
+
+std::string EasyLogs::__get_str_from_time__(const time_t& time) {
+	std::tm tm_info{};
+	localtime_s(&tm_info, &time);
+
+	char buffer[8 + 1];  // 8 символов + '\0'
+	strftime(buffer, sizeof(buffer), "%H:%M:%S", &tm_info);
+
+	return buffer;
+}
+
 void EasyLogs::Clear() {
 	data_mutex.lock();
 
