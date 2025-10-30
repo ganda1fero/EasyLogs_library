@@ -2,25 +2,75 @@
 
 // public 
 
+EasyLogs::EasyLogs() {
+	logs_name_ = "";
+	is_open_ = false;
+}
+
+EasyLogs::EasyLogs(std::string name) : EasyLogs() {
+	open(name);
+}
+
+EasyLogs::EasyLogs(std::vector<char> data) : EasyLogs() {
+	open_via_char(data);
+}
+
 EasyLogs::~EasyLogs() {
 	Clear();
 	txt_file_.close();
 }
 
 bool EasyLogs::open(std::string name) {
-	txt_file_.close();
-
+	std::string tmp_name = logs_name_;
 	logs_name_ = name;
 
 	if (ReadFromFile() == false) {
-		logs_name_.clear();
+		logs_name_ = tmp_name;
 		return false;
 	}
+
+	txt_file_.close();
 
 	txt_file_.open(logs_name_ + ".elt", std::ios::out | std::ios::app);	// открыли для записи (текст)
 
 	if (txt_file_.is_open() == false) 
 		return false;
+
+	is_open_ = true;
+	return true;
+}
+
+bool EasyLogs::open_via_char(std::vector<char> data) {
+	if (OpenViaCharData(data) == false) {
+		return false;
+	}
+
+	txt_file_.close();
+
+	logs_name_.clear();
+
+	is_open_ = true;
+	return true;
+}
+
+bool EasyLogs::is_open() {
+	return is_open_;
+}
+
+bool EasyLogs::create(std::string name) {
+	if (name.empty())
+		return false;
+
+	close();
+
+	logs_name_ = name;
+
+	if (save() == false) {
+		close();
+
+		return false;
+	}
+	open(name);	// чтобы явно открылся txt файл
 
 	return true;
 }
@@ -34,7 +84,19 @@ bool EasyLogs::save() {
 	return true;
 }
 
+bool EasyLogs::save_as(std::string name) {
+	std::string parent_name = logs_name_;	// запомнили имя
+	logs_name_ = name;	// временно дали имя для сохранения
+
+	bool tmp_flag = save();
+
+	logs_name_ = parent_name;
+
+	return tmp_flag;
+}
+
 void EasyLogs::close() {
+	is_open_ = false;
 	txt_file_.close();
 
 	logs_name_.clear();
@@ -302,4 +364,130 @@ void EasyLogs::__get_char_other__(std::vector<char>& vector, const std::vector<L
 
 		vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t_buffer));
 	}
+}
+
+bool EasyLogs::OpenViaCharData(const std::vector<char>& vector) {
+	// временные переменные
+	std::vector<LogNote*> AllLogs_data_;
+
+	std::vector<LogNote*> ErrorLogs_;
+	std::vector<LogNote*> SystemLogs_;
+	std::vector<LogNote*> SecurityLogs_;
+	std::vector<LogNote*> AuthLogs_;
+	std::vector<LogNote*> ActionLogs_;
+	std::vector<LogNote*> JudgeLogs_;
+	std::vector<LogNote*> NetworkLogs_;
+
+	// само чтение с проверкой
+	uint32_t data_index{ 0 };
+	try {
+		AllLogs_data_.reserve(*reinterpret_cast<const uint32_t*>(&vector[data_index]) * 2);
+		AllLogs_data_.resize(*reinterpret_cast<const uint32_t*>(&vector[data_index]));
+		data_index += sizeof(uint32_t);
+
+		for (uint32_t i{ 0 }; i < AllLogs_data_.size(); i++) {
+			AllLogs_data_[i] = new LogNote;	// создали
+
+			AllLogs_data_[i]->parent_index = i;	// восстановили логически
+
+			AllLogs_data_[i]->time = *reinterpret_cast<const time_t*>(&vector[data_index]);
+			data_index += sizeof(time_t);
+
+			AllLogs_data_[i]->log_types.resize(*reinterpret_cast<const uint32_t*>(&vector[data_index]));
+			data_index += sizeof(uint32_t);
+
+			for (uint32_t g{ 0 }; g < AllLogs_data_[i]->log_types.size(); g++) {
+				AllLogs_data_[i]->log_types[g] = *reinterpret_cast<const unsigned char*>(&vector[data_index]);
+				data_index += sizeof(unsigned char);
+			}
+
+			AllLogs_data_[i]->log_text.resize(*reinterpret_cast<const uint32_t*>(&vector[data_index]));
+			data_index += sizeof(uint32_t);
+
+			for (uint32_t g{ 0 }; g < AllLogs_data_[i]->log_text.size(); g++) {
+				AllLogs_data_[i]->log_text[g] = vector[data_index + g];
+			}
+			data_index += AllLogs_data_[i]->log_text.length();
+		}
+
+		// Для ErrorLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, ErrorLogs_);
+
+		// Для SystemLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, SystemLogs_);
+
+		// Для SecurityLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, SecurityLogs_);
+
+		// Для AuthLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, AuthLogs_);
+
+		// Для ActionLogs_ 
+		__open_via_char__(vector, data_index, AllLogs_data_, ActionLogs_);
+
+		// Для JudgeLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, JudgeLogs_);
+
+		// Для NetworkLogs_
+		__open_via_char__(vector, data_index, AllLogs_data_, NetworkLogs_);
+
+		// конец чтения
+	}
+	catch (...) {
+		// значит произошла какая-то ошибка (скорее всего битый *файл* или out of range)
+
+		for (uint32_t i{ 0 }; i < AllLogs_data_.size(); i++)
+			if (AllLogs_data_[i] != nullptr)
+				delete AllLogs_data_[i];
+
+		return false;
+	}
+
+	// если дошлю сюда - ошибок не было
+	Clear();	// очищаем изначальную динамическую память 
+
+	data_mutex.lock();	// блокируем для переноса
+	this->AllLogs_data_ = AllLogs_data_;
+
+	this->ErrorLogs_ = ErrorLogs_;
+	this->SystemLogs_ = SystemLogs_;
+	this->SecurityLogs_ = SecurityLogs_;
+	this->AuthLogs_ = AuthLogs_;
+	this->ActionLogs_ = ActionLogs_;
+	this->JudgeLogs_ = JudgeLogs_;
+	this->NetworkLogs_ = NetworkLogs_;
+	data_mutex.unlock();
+
+	return true;
+}
+
+void EasyLogs::__open_via_char__(const std::vector<char>& vector, uint32_t& data_index, const std::vector<LogNote*> main_vector, std::vector<LogNote*>& other_vector) {
+	other_vector.reserve(*reinterpret_cast<const uint32_t*>(&vector[data_index]) * 2);
+	other_vector.resize(*reinterpret_cast<const uint32_t*>(&vector[data_index]));
+	data_index += sizeof(uint32_t);
+
+	for (uint32_t i{ 0 }; i < other_vector.size(); i++) {
+		other_vector[i] = main_vector[*reinterpret_cast<const uint32_t*>(&vector[data_index])];
+		data_index += sizeof(uint32_t);
+	}
+}
+
+void EasyLogs::Clear() {
+	data_mutex.lock();
+
+	for (uint32_t i{ 0 }; i < AllLogs_data_.size(); i++)
+		if (AllLogs_data_[i] != nullptr)
+			delete AllLogs_data_[i];
+
+	AllLogs_data_.clear();
+
+	ErrorLogs_.clear();
+	SystemLogs_.clear();
+	SecurityLogs_.clear();
+	AuthLogs_.clear();
+	ActionLogs_.clear();
+	JudgeLogs_.clear();
+	NetworkLogs_.clear();
+
+	data_mutex.unlock();
 }

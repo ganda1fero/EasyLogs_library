@@ -62,6 +62,8 @@ private:
 	std::string logs_name_;	// имя ллгов
 
 	std::ofstream txt_file_;// текстовый файл логов
+
+	bool is_open_;
 	
 	//---
 	std::vector<LogNote*> AllLogs_data_;
@@ -82,6 +84,9 @@ private:
 
 	bool GetCharAllData(std::vector<char>& vector);
 	void __get_char_other__(std::vector<char>& vector, const std::vector<LogNote*>& other_vector);
+
+	bool OpenViaCharData(const std::vector<char>& vector);
+	void __open_via_char__(const std::vector<char>& vector, uint32_t& data_index, const std::vector<LogNote*> main_vector, std::vector<LogNote*>& other_vector);
 
 	bool AddLogBack(std::vector<unsigned char> types, std::string text);
 	
