@@ -5,6 +5,10 @@
 EasyLogs::EasyLogs() {
 	logs_name_ = "";
 	is_open_ = false;
+
+	std::setlocale(LC_ALL, "");
+	SetConsoleCP(1251);
+	SetConsoleOutputCP(1251);
 }
 
 EasyLogs::EasyLogs(std::string name) : EasyLogs() {
@@ -102,6 +106,274 @@ void EasyLogs::close() {
 	logs_name_.clear();
 
 	Clear();
+}
+
+void EasyLogs::select_all(std::vector<char>& vector) {
+	// временные переменные
+	data_mutex.lock();
+	std::vector<LogNote*> AllLogs_data_ = this->AllLogs_data_;	// скопировали на момент запроса
+	data_mutex.unlock();
+
+	__put_main_data__(vector, AllLogs_data_, 0, AllLogs_data_.size());
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_all(unsigned char type, std::vector<char>& vector) {
+	if (type > 7)
+		return select_all(vector);
+
+	std::vector<LogNote*> tmp_vector;
+
+	data_mutex.lock();
+	switch (type)
+	{
+		case EL_ERROR:
+			tmp_vector = ErrorLogs_;
+			break;
+		case EL_SYSTEM:
+			tmp_vector = SystemLogs_;
+			break;
+		case EL_SECURITY:
+			tmp_vector = SecurityLogs_;
+			break;
+		case EL_AUTH:
+			tmp_vector = AuthLogs_;
+			break;
+		case EL_ACTION:
+			tmp_vector = ActionLogs_;
+			break;
+		case EL_JUDGE:
+			tmp_vector = JudgeLogs_;
+			break;
+		case EL_NETWORK:
+			tmp_vector = NetworkLogs_;
+			break;
+		default:
+			data_mutex.unlock();
+			return;
+			break;
+	}
+	data_mutex.unlock();
+
+	__put_main_data__(vector, tmp_vector, 0, tmp_vector.size());
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_from(time_t time_from, std::vector<char>& vector) {
+	data_mutex.lock();
+	std::vector<LogNote*> AllLogs_data_ = this->AllLogs_data_;
+	data_mutex.unlock();
+
+	auto it = std::lower_bound(AllLogs_data_.begin(), AllLogs_data_.end(), time_from,
+		[](const LogNote* note, const time_t& need_time) {
+			return note->time < need_time;
+		});
+
+	uint32_t first_index = std::distance(AllLogs_data_.begin(), it);
+
+	__put_main_data__(vector, AllLogs_data_, first_index, AllLogs_data_.size());
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_from(unsigned char type, time_t time_from, std::vector<char>& vector) {
+	std::vector<LogNote*> tmp_vector;
+
+	data_mutex.lock();
+	switch (type)
+	{
+	case EL_ERROR:
+		tmp_vector = ErrorLogs_;
+		break;
+	case EL_SYSTEM:
+		tmp_vector = SystemLogs_;
+		break;
+	case EL_SECURITY:
+		tmp_vector = SecurityLogs_;
+		break;
+	case EL_AUTH:
+		tmp_vector = AuthLogs_;
+		break;
+	case EL_ACTION:
+		tmp_vector = ActionLogs_;
+		break;
+	case EL_JUDGE:
+		tmp_vector = JudgeLogs_;
+		break;
+	case EL_NETWORK:
+		tmp_vector = NetworkLogs_;
+		break;
+	default:
+		data_mutex.unlock();
+		return;
+		break;
+	}
+	data_mutex.unlock();
+
+	auto it = std::lower_bound(tmp_vector.begin(), tmp_vector.end(), time_from,
+		[](const LogNote* note, const time_t& need_time) {
+			return note->time < need_time;
+		});
+
+	uint32_t first_index = std::distance(tmp_vector.begin(), it);
+
+	__put_main_data__(vector, tmp_vector, first_index, tmp_vector.size());
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_to(time_t time_to, std::vector<char>& vector) {
+	data_mutex.lock();
+	std::vector<LogNote*> AllLogs_data_ = this->AllLogs_data_;
+	data_mutex.unlock();
+
+	time_to += 1;
+
+	auto it = std::lower_bound(AllLogs_data_.begin(), AllLogs_data_.end(), time_to,
+		[](const LogNote* log, const time_t& time) {
+			return log->time < time;
+		});
+
+	uint32_t last_index = std::distance(AllLogs_data_.begin(), it);
+
+	__put_main_data__(vector, AllLogs_data_, 0, last_index);
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_to(unsigned char type, time_t time_to, std::vector<char>& vector) {
+	std::vector<LogNote*> tmp_vector;
+
+	data_mutex.lock();
+	switch (type)
+	{
+	case EL_ERROR:
+		tmp_vector = ErrorLogs_;
+		break;
+	case EL_SYSTEM:
+		tmp_vector = SystemLogs_;
+		break;
+	case EL_SECURITY:
+		tmp_vector = SecurityLogs_;
+		break;
+	case EL_AUTH:
+		tmp_vector = AuthLogs_;
+		break;
+	case EL_ACTION:
+		tmp_vector = ActionLogs_;
+		break;
+	case EL_JUDGE:
+		tmp_vector = JudgeLogs_;
+		break;
+	case EL_NETWORK:
+		tmp_vector = NetworkLogs_;
+		break;
+	default:
+		data_mutex.unlock();
+		return;
+		break;
+	}
+	data_mutex.unlock();
+
+	time_to += 1;
+
+	auto it = std::lower_bound(tmp_vector.begin(), tmp_vector.end(), time_to,
+		[](const LogNote* log, const time_t& time) {
+			return log->time < time;
+		});
+
+	uint32_t last_index = std::distance(tmp_vector.begin(), it);
+
+	__put_main_data__(vector, tmp_vector, 0, last_index);
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_from_to(time_t time_from, time_t time_to, std::vector<char>& vector) {
+	data_mutex.lock();
+	std::vector<LogNote*> AllLogs_data_ = this->AllLogs_data_;
+	data_mutex.unlock();
+	
+	// начальный индекс
+	auto it = std::lower_bound(AllLogs_data_.begin(), AllLogs_data_.end(), time_from,
+		[](const LogNote* note, const time_t& need_time) {
+			return note->time < need_time;
+		});
+
+	uint32_t first_index = std::distance(AllLogs_data_.begin(), it);
+
+	// конечный индекс
+	time_to += 1;
+
+	it = std::lower_bound(AllLogs_data_.begin(), AllLogs_data_.end(), time_to,
+		[](const LogNote* log, const time_t& time) {
+			return log->time < time;
+		});
+
+	uint32_t last_index = std::distance(AllLogs_data_.begin(), it);
+	
+	__put_main_data__(vector, AllLogs_data_, first_index, last_index);
+
+	__put_empty_types__(vector);
+}
+
+void EasyLogs::select_from_to(unsigned char type, time_t time_from, time_t time_to, std::vector<char>& vector) {
+	std::vector<LogNote*> tmp_vector;
+
+	data_mutex.lock();
+	switch (type)
+	{
+	case EL_ERROR:
+		tmp_vector = ErrorLogs_;
+		break;
+	case EL_SYSTEM:
+		tmp_vector = SystemLogs_;
+		break;
+	case EL_SECURITY:
+		tmp_vector = SecurityLogs_;
+		break;
+	case EL_AUTH:
+		tmp_vector = AuthLogs_;
+		break;
+	case EL_ACTION:
+		tmp_vector = ActionLogs_;
+		break;
+	case EL_JUDGE:
+		tmp_vector = JudgeLogs_;
+		break;
+	case EL_NETWORK:
+		tmp_vector = NetworkLogs_;
+		break;
+	default:
+		data_mutex.unlock();
+		return;
+		break;
+	}
+	data_mutex.unlock();
+
+	// начальный индекс
+	auto it = std::lower_bound(tmp_vector.begin(), tmp_vector.end(), time_from,
+		[](const LogNote* note, const time_t& need_time) {
+			return note->time < need_time;
+		});
+
+	uint32_t first_index = std::distance(tmp_vector.begin(), it);
+
+	// конечный индекс
+	time_to += 1;
+
+	it = std::lower_bound(tmp_vector.begin(), tmp_vector.end(), time_to,
+		[](const LogNote* log, const time_t& time) {
+			return log->time < time;
+		});
+
+	uint32_t last_index = std::distance(tmp_vector.begin(), it);
+
+	__put_main_data__(vector, tmp_vector, first_index, last_index);
+
+	__put_empty_types__(vector);
 }
 
 bool EasyLogs::insert(const unsigned char& type, const std::string& text) {
@@ -232,7 +504,7 @@ bool EasyLogs::ReadFromFile() {
 	return true;
 }
 
-void EasyLogs::__read_other_logs__(std::ifstream& file, const std::vector<LogNote*> main_vector, std::vector<LogNote*>& other_vector) {
+void EasyLogs::__read_other_logs__(std::ifstream& file, const std::vector<LogNote*>& main_vector, std::vector<LogNote*>& other_vector) {
 	uint32_t uint32_t_buffer;
 
 	file.read(reinterpret_cast<char*>(&uint32_t_buffer), sizeof(uint32_t_buffer));
@@ -570,10 +842,63 @@ std::string EasyLogs::__get_str_from_time__(const time_t& time) {
 	std::tm tm_info{};
 	localtime_s(&tm_info, &time);
 
-	char buffer[8 + 1];  // 8 символов + '\0'
-	strftime(buffer, sizeof(buffer), "%H:%M:%S", &tm_info);
+	char buffer[14 + 1];  // 14 символов + '\0'
+	strftime(buffer, sizeof(buffer), "%d.%m %H:%M:%S", &tm_info);
 
 	return buffer;
+}
+
+void EasyLogs::__put_empty_types__(std::vector<char>& vector) {
+	uint32_t uint32_t_buffer = 0;
+	char* tmp_ptr = reinterpret_cast<char*>(&uint32_t_buffer);
+
+	for (uint32_t i{ 0 }; i < 7; i++)
+		vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t));
+}
+
+void EasyLogs::__put_main_data__(std::vector<char>& vector, const std::vector<LogNote*>& main_data, uint32_t first_index, uint32_t last_index) {
+	vector.clear();
+
+	// временные переменные
+	uint32_t uint32_t_buffer;
+	time_t time_t_buffer;
+	char* tmp_ptr;
+
+	if (first_index > main_data.size() || last_index > main_data.size()) {
+		// значит таких данных просто не может быть
+		uint32_t_buffer = 0;
+		tmp_ptr = reinterpret_cast<char*>(&uint32_t_buffer);
+		vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t));
+
+		return;
+	}
+	else {
+		// значит записываем по логике данные
+		uint32_t_buffer = last_index - first_index;
+		tmp_ptr = reinterpret_cast<char*>(&uint32_t_buffer);
+		vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t));
+
+		for (uint32_t i{ first_index }; i < last_index; i++) {
+			time_t_buffer = main_data[i]->time;
+			tmp_ptr = reinterpret_cast<char*>(&time_t_buffer);
+			vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(time_t));
+
+			uint32_t_buffer = main_data[i]->log_types.size();
+			tmp_ptr = reinterpret_cast<char*>(&uint32_t_buffer);
+			vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t));
+
+			for (uint32_t g{ 0 }; g < main_data[i]->log_types.size(); g++)
+				vector.push_back(*reinterpret_cast<char*>(&main_data[i]->log_types[g]));
+
+			uint32_t_buffer = main_data[i]->log_text.length();
+			tmp_ptr = reinterpret_cast<char*>(&uint32_t_buffer);
+			vector.insert(vector.end(), tmp_ptr, tmp_ptr + sizeof(uint32_t));
+
+			vector.insert(vector.end(), &main_data[i]->log_text[0], &main_data[i]->log_text[0] + main_data[i]->log_text.size());
+		}
+
+		return;
+	}
 }
 
 void EasyLogs::Clear() {
@@ -594,4 +919,90 @@ void EasyLogs::Clear() {
 	NetworkLogs_.clear();
 
 	data_mutex.unlock();
+}
+
+void EasyLogs::print_all() {
+	print_all(5000);
+}
+
+void EasyLogs::print_all(uint32_t count) {
+	if (count > 5000)
+		count = 5000;
+
+	if (AllLogs_data_.empty()) {
+		__set_cout_color__(DARK_GRAY_COLOR);
+		std::cout << "Логи пусты" << std::endl;
+		__set_cout_color__(WHITE_COLOR);
+	}
+	else {	// есть что выводить
+		print_mutex.lock();
+
+		// временные переменные
+		data_mutex.lock();
+		std::vector<LogNote*> AllLogs_data_ = this->AllLogs_data_;	// скопировали данные на момент вывода
+		data_mutex.unlock();
+
+		uint32_t first_index{ 0 };
+		if (AllLogs_data_.size() > count) {
+			first_index = AllLogs_data_.size() - count;
+			__set_cout_color__(DARK_GRAY_COLOR);
+			std::cout << "-------Выше еще [" << first_index << "] записей-------\n";
+		}
+
+		for (uint32_t i{ first_index }; i < AllLogs_data_.size(); i++) {
+			__set_cout_color__(DARK_GRAY_COLOR);
+			std::cout << __get_str_from_time__(AllLogs_data_[i]->time) << ' ';
+
+			for (uint32_t g{ 0 }; g < AllLogs_data_[i]->log_types.size(); g++) {
+				switch (AllLogs_data_[i]->log_types[g])
+				{
+				case EL_ERROR:
+					__set_cout_color__(RED_COLOR);
+					std::cout << "[ERROR]";
+					break;
+				case EL_SYSTEM:
+					__set_cout_color__(LIGHT_MAGENTA_COLOR);
+					std::cout << "[SYSTEM]";
+					break;
+				case EL_SECURITY:
+					__set_cout_color__(YELLOW_COLOR);
+					std::cout << "[SECURITY]";
+					break;
+				case EL_AUTH:
+					__set_cout_color__(LIGHT_BLUE_COLOR);
+					std::cout << "[AUTH]";
+					break;
+				case EL_ACTION:
+					__set_cout_color__(CYAN_COLOR);
+					std::cout << "[ACTION]";
+					break;
+				case EL_JUDGE:
+					__set_cout_color__(LIGHT_GREEN_COLOR);
+					std::cout << "[JUDGE]";
+					break;
+				case EL_NETWORK:
+					__set_cout_color__(LIGHT_CYAN_COLOR);
+					std::cout << "[NETWORK]";
+					break;
+				default:
+					__set_cout_color__(LIGHT_RED_COLOR);
+					std::cout << "[NONE]";
+					break;
+				}
+			}
+
+			__set_cout_color__(WHITE_COLOR);
+			std::cout << ' ' << AllLogs_data_[i]->log_text << '\n';
+		}
+		std::cout.flush();	
+
+		print_mutex.unlock();
+	}
+}
+
+void EasyLogs::__set_cout_color__(uint32_t color_id) {
+	if (color_id > 15)
+		return;
+
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color_id);
 }
